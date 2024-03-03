@@ -81,8 +81,8 @@ def keyboard_listener(call: types.CallbackQuery):
 				bot.send_message(call.message.chat.id, "Ошибка при получении ближайшего мероприятия")
 
 	elif data[0] == 'buy_ticket' or call.data == 'buy_ticket':
-		bot.send_message(call.message.chat.id,
-						 "Перечислите деньги на банковскую карту XXXX XXXX XXXX XXXX\nПосле напишите номер карты, с которой были перечисленны средства, в формате XXXX XXXX XXXX XXXX")
+		bot.send_message(call.message.chat.id, f"Перечислите деньги на банковскую карту XXXX XXXX XXXX XXXX"
+											   f"\nПосле напишите номер карты, с которой были перечисленны средства, в формате XXXX XXXX XXXX XXXX")
 		bot.register_next_step_handler(call.message, bank_card_input, data[1] if len(data) > 1 else None)
 
 	elif call.data == 'check_tickets':
