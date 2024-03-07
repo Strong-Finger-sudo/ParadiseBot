@@ -30,11 +30,27 @@ def handle_start(message: Message):
 	promoter = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
 
 	markup = types.InlineKeyboardMarkup()
-	buy_ticket = types.InlineKeyboardButton('Купить билет', callback_data=f'buy_ticket {promoter}')
-	check_event = types.InlineKeyboardButton('Ближайшее мероприятие', callback_data='check_event')
+	buy_ticket = types.InlineKeyboardButton('Купити квиток 🎟️', callback_data=f'buy_ticket {promoter}')
 
-	markup.add(buy_ticket, check_event)
-	bot.send_message(message.chat.id, "Привет, я бот для проверки билетов на мероприятия", reply_markup=markup)
+	markup.add(buy_ticket)
+
+	with Session(engine) as session:
+		try:
+			event = session.query(Event).order_by(desc(Event.id)).first()
+			if event:
+				bot.send_message(message.chat.id, f"Paradise Seasons Bot"
+												  f"\n"
+												  f"\nНайближчий захід 🎉: {event.event_name}"
+												  f"\nДата 🗓️: {event.event_date}"
+												  f"\nТипова вартість 💵: {event.event_price_default}"
+												  f"\nВіп вартість 💸: {event.event_price_vip}"
+												  f"\nЦіна кінцевого терміну 💵: {event.event_price_deadline}",
+								 reply_markup=markup)
+			else:
+				bot.send_message(message.chat.id, "Заходів поки немає 🙅‍♀️")
+		except Exception as e:
+			print(e)
+			bot.send_message(message.chat.id, "Помилка ❌ під час отримання найближчої події 🪩")
 
 
 # Вызов админки
@@ -42,13 +58,13 @@ def handle_start(message: Message):
 def handle_admin(message: Message):
 	if message.from_user.id in ADMINS:
 		markup = types.InlineKeyboardMarkup()
-		add_event = types.InlineKeyboardButton('Добавить мероприятие', callback_data='add_event')
-		check_tickets = types.InlineKeyboardButton('Проверить билеты', callback_data='check_tickets')
-		check_ticket_buy_request = types.InlineKeyboardButton('Проверить запросы на покупку билетов',
+		add_event = types.InlineKeyboardButton('Додати подію 📆', callback_data='add_event')
+		check_tickets = types.InlineKeyboardButton('Перевірити квитки 🎟', callback_data='check_tickets')
+		check_ticket_buy_request = types.InlineKeyboardButton('Перевірте 🧐 заявки на купівлю квитка 🎟 ',
 															  callback_data='check_ticket_buy_request')
 
 		markup.add(add_event, check_tickets, check_ticket_buy_request)
-		bot.send_message(message.chat.id, "Добавить мероприятие", reply_markup=markup)
+		bot.send_message(message.chat.id, "Адмін панель 👑", reply_markup=markup)
 
 
 # Обработчик кнопок
@@ -57,36 +73,16 @@ def keyboard_listener(call: types.CallbackQuery):
 	data = call.data.split(' ')
 
 	if call.data == 'add_event':
-		bot.send_message(call.message.chat.id, "Введите название мероприятия")
+		bot.send_message(call.message.chat.id, "Введіть назву події 🎤")
 		bot.register_next_step_handler(call.message, handle_event_name_input)
 
-	elif call.data == 'check_event':
-		markup = types.InlineKeyboardMarkup()
-		buy_ticket = types.InlineKeyboardButton('Купить билет', callback_data='buy_ticket')
-
-		markup.add(buy_ticket)
-		with Session(engine) as session:
-			try:
-				event = session.query(Event).order_by(desc(Event.id)).first()
-				if event:
-					bot.send_message(call.message.chat.id, f"Ближайшее мероприятие: {event.event_name}"
-														   f"\nДата: {event.event_date}"
-														   f"\nЦена по умолчанию: {event.event_price_default}"
-														   f"\nЦена VIP: {event.event_price_vip}"
-														   f"\nЦена дедлайна: {event.event_price_deadline}", reply_markup=markup)
-				else:
-					bot.send_message(call.message.chat.id, "Мероприятий еще нет")
-			except Exception as e:
-				print(e)
-				bot.send_message(call.message.chat.id, "Ошибка при получении ближайшего мероприятия")
-
 	elif data[0] == 'buy_ticket' or call.data == 'buy_ticket':
-		bot.send_message(call.message.chat.id, f"Перечислите деньги на банковскую карту XXXX XXXX XXXX XXXX"
-											   f"\nПосле напишите номер карты, с которой были перечисленны средства, в формате XXXX XXXX XXXX XXXX")
+		bot.send_message(call.message.chat.id, f"Переказ грошей на банківську карту 💳 XXXX XXXXXX XXXXX"
+											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXXXX XXXXX XXXX XXXX")
 		bot.register_next_step_handler(call.message, bank_card_input, data[1] if len(data) > 1 else None)
 
 	elif call.data == 'check_tickets':
-		bot.send_message(call.message.chat.id, "Введите ID билета")
+		bot.send_message(call.message.chat.id, "Введіть 🆔 квитка")
 		bot.register_next_step_handler(call.message, check_ticket)
 
 	elif call.data == 'accept':
@@ -99,18 +95,18 @@ def keyboard_listener(call: types.CallbackQuery):
 				ticket.passed = True
 				session.commit()
 			r.delete(f'ticket_id_{call.from_user.id}')
-			bot.send_message(call.message.chat.id, "Билет успешно принят")
+			bot.send_message(call.message.chat.id, "Квиток 🎟️ успішно прийнятий ✅")
 
 		except Exception as e:
 			print(e)
-			bot.send_message(call.message.chat.id, "Ошибка при принятии билета")
+			bot.send_message(call.message.chat.id, "Помилка ❌при прийманні квитка🎟️")
 
 		finally:
 			handle_admin(call.message)
 
 	elif call.data == 'decline':
 		r.delete(f'ticket_id_{call.from_user.id}')
-		bot.send_message(call.message.chat.id, "Билет отклонен")
+		bot.send_message(call.message.chat.id, "Квиток відхилен 💀")
 		handle_admin(call.message)
 
 	elif call.data == 'create_event':
@@ -122,15 +118,15 @@ def keyboard_listener(call: types.CallbackQuery):
 				session.add(Event(**saved_dict))
 				session.commit()
 			r.delete(f'event_data_{call.from_user.id}')
-			bot.send_message(call.message.chat.id, "Мероприятие добавлено")
+			bot.send_message(call.message.chat.id, "Захід добавлено🪩 ✅")
 		except Exception as e:
 			print(e)
-			bot.send_message(call.message.chat.id, "Ошибка при добавлении мероприятия")
+			bot.send_message(call.message.chat.id, "Помилка при додаванні заходу ❌")
 
 	elif call.data == 'eject_create_event':
 		r.delete(f'event_data_{call.from_user.id}')
 
-		bot.send_message(call.message.chat.id, "Создание мероприятие отменено")
+		bot.send_message(call.message.chat.id, "Створення заходу відхилено ❌")
 
 	elif call.data == 'check_ticket_buy_request':
 		with Session(engine) as session:
@@ -143,7 +139,7 @@ def keyboard_listener(call: types.CallbackQuery):
 
 					markup.add(confirm_ticket, eject_ticket)
 
-					bot.send_message(call.message.chat.id, f"ID билета: {ticket.ticket_id}"
+					bot.send_message(call.message.chat.id, f"ID: {ticket.ticket_id}"
 														   f"\nUser ID: {ticket.user_id}"
 														   f"\nUsername: {ticket.username}"
 														   f"\nFull name: {ticket.full_name}"
@@ -152,7 +148,7 @@ def keyboard_listener(call: types.CallbackQuery):
 														   f"\nPrice: {ticket.price}", reply_markup=markup)
 
 			else:
-				bot.send_message(call.message.chat.id, "Нету запросов на покупку билетов")
+				bot.send_message(call.message.chat.id, "Нема запитів на купівлю квитка 🧐")
 			session.commit()
 			handle_admin(call.message)
 
@@ -163,11 +159,11 @@ def keyboard_listener(call: types.CallbackQuery):
 
 				ticket.confirmed = True
 				session.commit()
-				bot.send_message(call.message.chat.id, f"Билет {ticket.ticket_id} успешно подтвержден")
+				bot.send_message(call.message.chat.id, f"Квиток {ticket.ticket_id} прийнятий ✅")
 				bot.delete_message(call.message.chat.id, call.message.message_id)
 		except Exception as e:
 			print(e)
-			bot.send_message(call.message.chat.id, f"Ошибка при подтверждении билета {ticket.ticket_id}")
+			bot.send_message(call.message.chat.id, f"Помилка при підтвердженні квитка {ticket.ticket_id} ❌")
 
 	elif call.data.startswith('ejectTicket'):
 		try:
@@ -176,11 +172,11 @@ def keyboard_listener(call: types.CallbackQuery):
 
 				ticket.confirmed = False
 				session.commit()
-				bot.send_message(call.message.chat.id, f"Билет {ticket.ticket_id} успешно отклонен")
+				bot.send_message(call.message.chat.id, f"Квиток {ticket.ticket_id} відхилен ✅")
 				bot.delete_message(call.message.chat.id, call.message.message_id)
 		except Exception as e:
 			print(e)
-			bot.send_message(call.message.chat.id, f"Ошибка при отклонении билета {ticket.ticket_id}")
+			bot.send_message(call.message.chat.id, f"Помилка при выдхиленні квитка {ticket.ticket_id} ❌")
 
 
 # Проверка билета
@@ -195,7 +191,7 @@ def check_ticket(message: Message):
 			markup.add(add_event, check_tickets)
 			if ticket.confirmed is True:
 				save_to_redis(r, f'ticket_id_{message.from_user.id}', ticket.ticket_id)
-				bot.send_message(message.chat.id, f"ID билета: {ticket.ticket_id}"
+				bot.send_message(message.chat.id, f"ID: {ticket.ticket_id}"
 												  f"\nUser ID: {ticket.user_id}"
 												  f"\nUsername: {ticket.username}"
 												  f"\nFull name: {ticket.full_name}"
@@ -204,14 +200,14 @@ def check_ticket(message: Message):
 												  f"\nPrice: {ticket.price}"
 												  f"\nConfirmed: {ticket.confirmed}", reply_markup=markup)
 			else:
-				bot.send_message(message.chat.id, f"Билет был отклонён или не подтвержён админом")
+				bot.send_message(message.chat.id, f"Квиток був відхилен або не прийнят адміністратором ❌")
 		else:
-			bot.send_message(message.chat.id, "Билеты не найдены")
+			bot.send_message(message.chat.id, "Квитки не знайдени 🙅‍♀️")
 
 
 # Ввод карты при покупки
 def bank_card_input(message: Message, promoter):
-	bot.send_message(message.chat.id, "Введите своё полное имя")
+	bot.send_message(message.chat.id, "Введіть своє повне ім'я...")
 
 	ticket_data = {
 		"date": f"{datetime.now().replace(microsecond=0)}",
@@ -230,18 +226,23 @@ def bank_card_input(message: Message, promoter):
 def full_name_input(message: Message, ticket_data):
 	full_name = message.text
 
+	markup = types.InlineKeyboardMarkup()
+	back_menu = types.InlineKeyboardButton('🔙 Назад', callback_data='back_menu')
+
+	markup.add(back_menu)
+
 	ticket_data['full_name'] = full_name
 
 	with Session(engine) as session:
 		session.add(Ticket(**ticket_data))
 		session.commit()
 
-	bot.send_message(message.chat.id, f"Покупка вашего билета была зарегестрирована, спасибо за покупку!"
-									  f"\nВаш билет будет ниже")
-	bot.send_message(message.chat.id, f"Цена: {str(ticket_data['price'])}"
-									  f"\nБанковская карта: {ticket_data['bank_card']}"
-									  f"\nПолное имя: {ticket_data['full_name']}"
-									  f"\nID билета: {ticket_data['ticket_id']}")
+	bot.send_message(message.chat.id, f"Придбання вашого квитка була зареєстрованна!"
+									  f"\nВаш квиток буде нижче ⬇⬇⬇")
+	bot.send_message(message.chat.id, f"Типова вартість ціна 💸: {str(ticket_data['price'])}"
+									  f"\nБанковська картка 💳: {ticket_data['bank_card']}"
+									  f"\nПовне ім'я 📄: {ticket_data['full_name']}"
+									  f"\nID: {ticket_data['ticket_id']}", reply_markup=markup)
 
 	handle_start(message)
 
@@ -252,14 +253,14 @@ def handle_event_name_input(message: Message):
 		event_data = {
 			'event_name': message.text
 		}
-		bot.send_message(message.chat.id, "Введите дату события в формате DD.MM.YYYY")
+		bot.send_message(message.chat.id, "Введіть дату захода у форматі DD.MM.YYYY 📆")
 		bot.register_next_step_handler(message, handle_date_input, event_data)
 
 
 # Ввод даты события
 def handle_date_input(message: Message, event_data):
 	if message.from_user.id in ADMINS:
-		bot.send_message(message.chat.id, "Введите обычную цену билета")
+		bot.send_message(message.chat.id, "Введіть звичайну вартість квитка 💵")
 		event_data['event_date'] = message.text
 		bot.register_next_step_handler(message, handle_price_default_input, event_data)
 
@@ -267,7 +268,7 @@ def handle_date_input(message: Message, event_data):
 # Ввод цены при регистрации события для обычного клиента
 def handle_price_default_input(message: Message, event_data):
 	if message.from_user.id in ADMINS:
-		bot.send_message(message.chat.id, "Введите цену VIP билета")
+		bot.send_message(message.chat.id, "Введіть вартість VIP квитка 💰")
 		event_data['event_price_default'] = message.text
 		bot.register_next_step_handler(message, handle_price_vip_input, event_data)
 
@@ -276,7 +277,7 @@ def handle_price_default_input(message: Message, event_data):
 def handle_price_vip_input(message: Message, event_data):
 	if message.from_user.id in ADMINS:
 		event_data['event_price_vip'] = message.text
-		bot.send_message(message.chat.id, "Введите цену дедлайн билета")
+		bot.send_message(message.chat.id, "Введіть вартість дедлайн билета 📅")
 		bot.register_next_step_handler(message, handle_price_deadline_input, event_data)
 
 
@@ -285,7 +286,7 @@ def handle_price_deadline_input(message: Message, event_data):
 	if message.from_user.id in ADMINS:
 		event_data['event_price_deadline'] = message.text
 
-		bot.send_message(message.chat.id, "Проверьте данные события и подтвердите сохранение")
+		bot.send_message(message.chat.id, "Перевірте введені дані та підтвердіть створення заходу ✅")
 
 		markup = types.InlineKeyboardMarkup()
 		create_event = types.InlineKeyboardButton('✔', callback_data=f'create_event')
@@ -294,11 +295,11 @@ def handle_price_deadline_input(message: Message, event_data):
 		save_dict_to_redis(r, f'event_data_{message.from_user.id}', event_data)
 
 		markup.add(create_event, delete_data)
-		bot.send_message(message.chat.id, f"Название события: {event_data['event_name']}"
-										  f"\n Дата события: {event_data['event_date']}"
-										  f"\n Обычная цена билета: {event_data['event_price_default']}"
-										  f"\n Цена VIP билета: {event_data['event_price_vip']}"
-										  f"\n Цена дедлайна билета: {event_data['event_price_deadline']}",
+		bot.send_message(message.chat.id, f"Назва заходу 🖊: {event_data['event_name']}"
+										  f"\n Дата 📆: {event_data['event_date']}"
+										  f"\n Типова ціна 💵: {event_data['event_price_default']}"
+										  f"\n Віп ціна 💸: {event_data['event_price_vip']}"
+										  f"\n Ціна кінцевого терміну 💵: {event_data['event_price_deadline']}",
 						 reply_markup=markup)
 
 		handle_admin(message)
