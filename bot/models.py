@@ -2,7 +2,7 @@ import secrets
 
 from sqlalchemy import Column, Integer, String, MetaData, Table, Boolean, BigInteger, Time, Null
 
-from bot.database import metadata, Base
+from database import metadata, Base
 
 class Ticket(Base):
 	__tablename__ = 'tickets'

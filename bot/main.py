@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 from telebot import types, TeleBot
 from telebot.types import Message
 
-from bot.database import engine
-from bot.scripts import save_dict_to_redis, save_to_redis
+from database import engine
+from scripts import save_dict_to_redis, save_to_redis
 from config import BOT_TOKEN, ADMINS, PROMOTERS
-from bot.models import Ticket, Event
+from models import Ticket, Event
 
 import redis
 
