@@ -21,7 +21,7 @@ class Bot(TeleBot):
 
 
 bot = Bot()
-r = redis.Redis(host='localhost', port=6379, db=0)
+r = redis.Redis(host='localhost', port=5370, db=0)
 
 
 # Старт
