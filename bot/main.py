@@ -21,8 +21,6 @@ class Bot(TeleBot):
 
 
 bot = Bot()
-r = redis.Redis(host='localhost', port=5370, db=0)
-
 
 # Старт
 @bot.message_handler(commands=['start'])
@@ -306,4 +304,5 @@ def handle_price_deadline_input(message: Message, event_data):
 
 
 if __name__ == '__main__':
+	r = redis.Redis(host='redis_app', port=6379, db=0)
 	bot.polling()
