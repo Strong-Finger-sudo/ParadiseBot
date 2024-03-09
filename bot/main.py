@@ -305,5 +305,5 @@ def handle_price_deadline_input(message: Message, event_data):
 
 
 if __name__ == '__main__':
-	r = redis.Redis(host='redis_app', port=6379, db=0)
+	r = redis.Redis(host='redis_app', port=5370, db=0)
 	bot.polling()
