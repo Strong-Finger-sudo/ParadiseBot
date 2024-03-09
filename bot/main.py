@@ -74,6 +74,9 @@ def keyboard_listener(call: types.CallbackQuery):
 		bot.send_message(call.message.chat.id, "Введіть назву події 🎤")
 		bot.register_next_step_handler(call.message, handle_event_name_input)
 
+	elif call.data == 'back_menu':
+		handle_start(call.message)
+
 	elif data[0] == 'buy_ticket' or call.data == 'buy_ticket':
 		bot.send_message(call.message.chat.id, f"Переказ грошей на банківську карту 💳 XXXX XXXXXX XXXXX"
 											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXXXX XXXXX XXXX XXXX")
@@ -241,8 +244,6 @@ def full_name_input(message: Message, ticket_data):
 									  f"\nБанковська картка 💳: {ticket_data['bank_card']}"
 									  f"\nПовне ім'я 📄: {ticket_data['full_name']}"
 									  f"\nID: {ticket_data['ticket_id']}", reply_markup=markup)
-
-	handle_start(message)
 
 
 # Ввод названия события
