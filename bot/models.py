@@ -10,14 +10,15 @@ class Ticket(Base):
 	id = Column(Integer, primary_key=True)
 	ticket_id = Column(Integer)
 	date = Column(String)
-	bank_card = Column(String)
+	bank_card = Column(String, nullable=False)
 	price = Column(Integer)
 	user_id = Column(BigInteger)
 	promoter = Column(String, nullable=True)
 	username = Column(String)
-	full_name = Column(String)
+	full_name = Column(String, nullable=False)
 	passed = Column(Boolean, default=False, nullable=False)
 	confirmed = Column(Boolean, nullable=True)
+	photo_url = Column(String)
 
 class Event(Base):
 	__tablename__ = 'events'

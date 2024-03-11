@@ -9,7 +9,7 @@ from telebot.types import Message
 
 from database import engine
 from scripts import save_dict_to_redis, save_to_redis
-from config import BOT_TOKEN, ADMINS, PROMOTERS
+from config import BOT_TOKEN, ADMINS, PROMOTERS, TEST_BOT_TOKEN
 from models import Ticket, Event
 
 import redis
@@ -17,7 +17,7 @@ import redis
 
 class Bot(TeleBot):
 	def __init__(self):
-		super().__init__(token=BOT_TOKEN)
+		super().__init__(token=TEST_BOT_TOKEN)
 
 
 bot = Bot()
@@ -27,13 +27,17 @@ bot = Bot()
 def handle_start(message: Message):
 	promoter = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
 
+	handle_start_page(message, promoter)
+
+
+def handle_start_page(message: Message, promoter=None):
+
 	markup = types.InlineKeyboardMarkup()
 	buy_ticket = types.InlineKeyboardButton('Купити квиток 🎟️', callback_data=f'buy_ticket {promoter}')
 
 	markup.add(buy_ticket)
 
 	with Session(engine) as session:
-		try:
 			event = session.query(Event).order_by(desc(Event.id)).first()
 			if event:
 				bot.send_message(message.chat.id, f"Paradise Seasons Bot"
@@ -43,13 +47,9 @@ def handle_start(message: Message):
 												  f"\nТипова вартість 💵: {event.event_price_default}"
 												  f"\nВіп вартість 💸: {event.event_price_vip}"
 												  f"\nЦіна кінцевого терміну 💵: {event.event_price_deadline}",
-								 reply_markup=markup)
+								 				  reply_markup=markup)
 			else:
 				bot.send_message(message.chat.id, "Заходів поки немає 🙅‍♀️")
-		except Exception as e:
-			print(e)
-			bot.send_message(message.chat.id, "Помилка ❌ під час отримання найближчої події 🪩")
-
 
 # Вызов админки
 @bot.message_handler(commands=['admin'])
@@ -71,19 +71,22 @@ def keyboard_listener(call: types.CallbackQuery):
 	data = call.data.split(' ')
 
 	if call.data == 'add_event':
-		bot.send_message(call.message.chat.id, "Введіть назву події 🎤")
+		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Введіть назву події 🎤")
 		bot.register_next_step_handler(call.message, handle_event_name_input)
 
 	elif call.data == 'back_menu':
-		handle_start(call.message)
+		handle_start_page(call.message)
 
 	elif data[0] == 'buy_ticket' or call.data == 'buy_ticket':
-		bot.send_message(call.message.chat.id, f"Переказ грошей на банківську карту 💳 XXXX XXXXXX XXXXX"
+		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Переказ грошей на "
+																							 f"банківську карту 💳 "
+																							 f"XXXX XXXXXX XXXXX"
 											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXXXX XXXXX XXXX XXXX")
 		bot.register_next_step_handler(call.message, bank_card_input, data[1] if len(data) > 1 else None)
 
 	elif call.data == 'check_tickets':
-		bot.send_message(call.message.chat.id, "Введіть 🆔 квитка")
+		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id,
+							  text=f"Введіть 🆔 квитка")
 		bot.register_next_step_handler(call.message, check_ticket)
 
 	elif call.data == 'accept':
@@ -227,23 +230,44 @@ def bank_card_input(message: Message, promoter):
 def full_name_input(message: Message, ticket_data):
 	full_name = message.text
 
-	markup = types.InlineKeyboardMarkup()
-	back_menu = types.InlineKeyboardButton('🔙 Назад', callback_data='back_menu')
-
-	markup.add(back_menu)
-
 	ticket_data['full_name'] = full_name
 
-	with Session(engine) as session:
-		session.add(Ticket(**ticket_data))
-		session.commit()
+	bot.send_message(message.chat.id, f"Відправте знімок екрану з оплатою")
+	bot.register_next_step_handler(message, send_screen_shot, ticket_data)
 
-	bot.send_message(message.chat.id, f"Придбання вашого квитка була зареєстрованна!"
-									  f"\nВаш квиток буде нижче ⬇⬇⬇")
-	bot.send_message(message.chat.id, f"Типова вартість ціна 💸: {str(ticket_data['price'])}"
-									  f"\nБанковська картка 💳: {ticket_data['bank_card']}"
-									  f"\nПовне ім'я 📄: {ticket_data['full_name']}"
-									  f"\nID: {ticket_data['ticket_id']}", reply_markup=markup)
+# Отправка скриншота оплаты
+def send_screen_shot(message: Message, ticket_data):
+
+	try:
+		photo_id = message.photo[-1].file_id
+
+		photo_file = bot.get_file(photo_id)
+		photo_url = f"https://api.telegram.org/file/bot{bot.token}/{photo_file.file_path}"
+
+		ticket_data['photo_url'] = photo_url
+
+		markup = types.InlineKeyboardMarkup()
+		back_menu = types.InlineKeyboardButton('🔙 Назад', callback_data='back_menu')
+
+		markup.add(back_menu)
+
+		try:
+			with Session(engine) as session:
+				session.add(Ticket(**ticket_data))
+				session.commit()
+			bot.send_message(message.chat.id, f"Придбання вашого квитка була зареєстрованна!"
+											  f"\nВаш квиток буде нижче ⬇⬇⬇")
+			bot.send_message(message.chat.id, f"Типова вартість ціна 💸: {str(ticket_data['price'])}"
+											  f"\nБанковська картка 💳: {ticket_data['bank_card']}"
+											  f"\nПовне ім'я 📄: {ticket_data['full_name']}"
+											  f"\nID: {ticket_data['ticket_id']}", reply_markup=markup)
+		except Exception as e:
+			bot.send_message(message.chat.id, "При додаванні квитків виникла помилка ❌")
+			handle_start(message)
+
+	except Exception as e:
+		bot.send_message(message.chat.id, "Відправте знімок екрану з оплатою")
+		bot.register_next_step_handler(message, send_screen_shot, ticket_data)
 
 
 # Ввод названия события
