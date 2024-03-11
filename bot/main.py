@@ -1,7 +1,10 @@
 import json
 from datetime import datetime
+from io import BytesIO
 from random import randint
+from PIL import Image
 
+import requests
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from telebot import types, TeleBot
@@ -143,14 +146,24 @@ def keyboard_listener(call: types.CallbackQuery):
 
 					markup.add(confirm_ticket, eject_ticket)
 
-					bot.send_message(call.message.chat.id, f"ID: {ticket.ticket_id}"
-														   f"\nUser ID: {ticket.user_id}"
-														   f"\nUsername: {ticket.username}"
-														   f"\nFull name: {ticket.full_name}"
-														   f"\nDate: {ticket.date}"
-														   f"\nBank card: {ticket.bank_card}"
-														   f"\nPrice: {ticket.price}", reply_markup=markup)
+					response = requests.get(ticket.photo_url)
 
+					if response.status_code == 200:
+
+						image = Image.open(BytesIO(response.content))
+
+						with BytesIO() as output:
+							image.save(output, format='JPEG')
+							output.seek(0)
+							bot.send_photo(call.message.chat.id, output, f"ID: {ticket.ticket_id}"
+																		   f"\nUser ID: {ticket.user_id}"
+																		   f"\nUsername: {ticket.username}"
+																		   f"\nFull name: {ticket.full_name}"
+																		   f"\nDate: {ticket.date}"
+																		   f"\nBank card: {ticket.bank_card}"
+																		   f"\nPrice: {ticket.price}", reply_markup=markup)
+					else:
+						bot.send_message(call.message.chat.id, f"При отриманні квитка виникла помилка ❌")
 			else:
 				bot.send_message(call.message.chat.id, "Нема запитів на купівлю квитка 🧐")
 			session.commit()

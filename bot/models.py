@@ -18,7 +18,7 @@ class Ticket(Base):
 	full_name = Column(String, nullable=False)
 	passed = Column(Boolean, default=False, nullable=False)
 	confirmed = Column(Boolean, nullable=True)
-	photo_url = Column(String)
+	photo_url = Column(String, nullable=False)
 
 class Event(Base):
 	__tablename__ = 'events'
