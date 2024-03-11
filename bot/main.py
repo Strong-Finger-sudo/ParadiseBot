@@ -17,7 +17,7 @@ import redis
 
 class Bot(TeleBot):
 	def __init__(self):
-		super().__init__(token=TEST_BOT_TOKEN)
+		super().__init__(token=BOT_TOKEN)
 
 
 bot = Bot()
