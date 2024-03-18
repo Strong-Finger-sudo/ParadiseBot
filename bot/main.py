@@ -37,8 +37,9 @@ def handle_start_page(message: Message, promoter=None):
 
 	markup = types.InlineKeyboardMarkup()
 	buy_ticket = types.InlineKeyboardButton('Купити квиток 🎟️', callback_data=f'buy_ticket {promoter}')
+	check_ticket_story = types.InlineKeyboardButton('История билетов 🖨', callback_data=f"check_ticket_story")
 
-	markup.add(buy_ticket)
+	markup.add(buy_ticket, check_ticket_story)
 
 	with Session(engine) as session:
 			event = session.query(Event).order_by(desc(Event.id)).first()
@@ -77,18 +78,85 @@ def keyboard_listener(call: types.CallbackQuery):
 		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Введіть назву події 🎤")
 		bot.register_next_step_handler(call.message, handle_event_name_input)
 
+	elif call.data == 'check_ticket_story':
+		markup = types.InlineKeyboardMarkup()
+		back = types.InlineKeyboardButton('Назад 🔙', callback_data='back_menu')
+
+		markup.add(back)
+		with Session(engine) as session:
+			tickets = session.query(Ticket).filter(Ticket.user_id == call.from_user.id).all()
+
+		if tickets:
+			for ticket in tickets:
+				bot.send_message(call.message.chat.id, f"ID: {ticket.ticket_id}"
+													   f"\nUser ID: {ticket.user_id}"
+													   f"\nUsername: {ticket.username}"
+													   f"\nFull name: {ticket.full_name}"
+													   f"\nDate: {ticket.date}"
+													   f"\nBank card: {ticket.bank_card}"
+													   f"\nPrice: {ticket.default_price if ticket.ticket_type == 'default' else ticket.vip_price}"
+											   		   f"\nTicket type: {ticket.ticket_type}")
+
+			bot.send_message(call.message.chat.id, "Ваші квитки 🎟️ ⬆", reply_markup=markup)
+
+		else:
+			bot.send_message(call.message.chat.id, "У вас ще нема квитків 🙅‍♀️", reply_markup=markup)
+
 	elif call.data == 'back_menu':
 		handle_start_page(call.message)
 
 	elif data[0] == 'buy_ticket' or call.data == 'buy_ticket':
-		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Переказ грошей на "
-																							 f"банківську карту 💳 "
-																							 f"XXXX XXXXXX XXXXX"
+
+		markup = types.InlineKeyboardMarkup()
+
+		with Session(engine) as session:
+			event = session.query(Event).order_by(desc(Event.id)).first()
+
+		ticket_data = {
+			"date": f"{datetime.now().replace(microsecond=0)}",
+			"ticket_id": randint(100000, 999999),
+			"user_id": call.from_user.id,
+			"username": call.from_user.username,
+			"promoter": data[1] if data[1] in PROMOTERS else None,
+			'default_price': event.event_price_default,
+			'vip_price': event.event_price_vip,
+			'deadline_price': event.event_price_deadline,
+			'event_id': event.id,
+		}
+
+		default = types.InlineKeyboardButton('🎟️', callback_data='ticket_type_default')
+		vip = types.InlineKeyboardButton('💎', callback_data='ticket_type_vip')
+
+		markup.add(default, vip)
+
+		bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text="Оберіть тип квитка 🎟️", reply_markup=markup)
+
+		save_dict_to_redis(r, f'ticket_{call.from_user.id}', ticket_data)
+
+	elif call.data == 'ticket_type_default':
+		ticket_r = r.get(f'ticket_{call.from_user.id}')
+		saved_dict = json.loads(ticket_r)
+		saved_dict['ticket_type'] = 'default'
+		bot.send_message(call.message.chat.id, f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
 											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXXXX XXXXX XXXX XXXX")
-		bot.register_next_step_handler(call.message, bank_card_input, data[1] if len(data) > 1 else None)
+		bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
+
+		r.delete(f'ticket_{call.from_user.id}')
+
+	elif call.data == 'ticket_type_vip':
+		ticket_r = r.get(f'ticket_{call.from_user.id}')
+		saved_dict = json.loads(ticket_r)
+		saved_dict['ticket_type'] = 'vip'
+		bot.send_message(call.message.chat.id, f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
+											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXXXX XXXXX XXXX XXXX")
+
+		bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
+
+		r.delete(f'ticket_{call.from_user.id}')
 
 	elif call.data == 'check_tickets':
 		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id,
+
 							  text=f"Введіть 🆔 квитка")
 		bot.register_next_step_handler(call.message, check_ticket)
 
@@ -102,18 +170,19 @@ def keyboard_listener(call: types.CallbackQuery):
 				ticket.passed = True
 				session.commit()
 			r.delete(f'ticket_id_{call.from_user.id}')
-			bot.send_message(call.message.chat.id, "Квиток 🎟️ успішно прийнятий ✅")
+			bot.edit_message_text(chat_id=call.message.chat.id, text="Квиток 🎟️ успішно прийнятий ✅",
+								  message_id=call.message.id)
+
+			handle_admin(call.message)
 
 		except Exception as e:
 			print(e)
 			bot.send_message(call.message.chat.id, "Помилка ❌при прийманні квитка🎟️")
 
-		finally:
-			handle_admin(call.message)
-
 	elif call.data == 'decline':
 		r.delete(f'ticket_id_{call.from_user.id}')
-		bot.send_message(call.message.chat.id, "Квиток відхилен 💀")
+		bot.edit_message_text(chat_id=call.message.chat.id, text="Квиток відхилен 💀", message_id=call.message.id)
+
 		handle_admin(call.message)
 
 	elif call.data == 'create_event':
@@ -146,6 +215,9 @@ def keyboard_listener(call: types.CallbackQuery):
 
 					markup.add(confirm_ticket, eject_ticket)
 
+					with Session(engine) as session:
+						event = session.query(Event).filter(Event.id == ticket.event_id).first()
+
 					response = requests.get(ticket.photo_url)
 
 					if response.status_code == 200:
@@ -161,7 +233,9 @@ def keyboard_listener(call: types.CallbackQuery):
 																		   f"\nFull name: {ticket.full_name}"
 																		   f"\nDate: {ticket.date}"
 																		   f"\nBank card: {ticket.bank_card}"
-																		   f"\nPrice: {ticket.price}", reply_markup=markup)
+																		   f"\nPrice: {ticket.default_price if ticket.ticket_type == 'default' else ticket.vip_price}"
+																		   f"\nTicket type: {ticket.ticket_type}"
+																		   f"\nEvent Name: {event.event_name}", reply_markup=markup)
 					else:
 						bot.send_message(call.message.chat.id, f"При отриманні квитка виникла помилка ❌")
 			else:
@@ -200,6 +274,8 @@ def keyboard_listener(call: types.CallbackQuery):
 def check_ticket(message: Message):
 	with Session(engine) as session:
 		ticket = session.query(Ticket).filter(Ticket.ticket_id == message.text).first()
+		event = session.query(Event).filter(Event.id == ticket.event_id).first()
+
 		if ticket:
 			markup = types.InlineKeyboardMarkup()
 			add_event = types.InlineKeyboardButton('✔', callback_data=f'accept')
@@ -207,34 +283,40 @@ def check_ticket(message: Message):
 
 			markup.add(add_event, check_tickets)
 			if ticket.confirmed is True:
-				save_to_redis(r, f'ticket_id_{message.from_user.id}', ticket.ticket_id)
 				bot.send_message(message.chat.id, f"ID: {ticket.ticket_id}"
-												  f"\nUser ID: {ticket.user_id}"
-												  f"\nUsername: {ticket.username}"
-												  f"\nFull name: {ticket.full_name}"
-												  f"\nDate: {ticket.date}"
-												  f"\nBank card: {ticket.bank_card}"
-												  f"\nPrice: {ticket.price}"
-												  f"\nConfirmed: {ticket.confirmed}", reply_markup=markup)
+										  f"\nUser ID: {ticket.user_id}"
+										  f"\nUsername: {ticket.username}"
+										  f"\nFull name: {ticket.full_name}"
+										  f"\nDate: {ticket.date}"
+										  f"\nBank card: {ticket.bank_card}"
+										  f"\nPrice: {ticket.default_price if ticket.ticket_type == 'default' else ticket.vip_price}"
+										  f"\nTicket type: {ticket.ticket_type}"
+										  f"\nPassed: {ticket.passed}"
+										  f"\nConfirmed: {ticket.confirmed}"
+										  f"\nEvent Name: {event.event_name}", reply_markup=markup)
+
+				save_to_redis(r, f'ticket_id_{message.from_user.id}', ticket.ticket_id)
 			else:
 				bot.send_message(message.chat.id, f"Квиток був відхилен або не прийнят адміністратором ❌")
 		else:
 			bot.send_message(message.chat.id, "Квитки не знайдени 🙅‍♀️")
+		handle_admin(message)
+
+
+# Вибір типа квитка
+def choose_kind_of_ticket(message: Message):
+	bot.send_message(chat_id=message.chat.id, text=f"Переказ грошей на банківську карту 💳 XXXX XXXX XXXX XXXX"
+												   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX")
+
+	bot.register_next_step_handler(message, bank_card_input)
 
 
 # Ввод карты при покупки
-def bank_card_input(message: Message, promoter):
-	bot.send_message(message.chat.id, "Введіть своє повне ім'я...")
+def bank_card_input(message: Message, ticket_data):
 
-	ticket_data = {
-		"date": f"{datetime.now().replace(microsecond=0)}",
-		"ticket_id": randint(100000, 999999),
-		"bank_card": message.text,
-		"price": 250,
-		"user_id": message.from_user.id,
-		"username": message.from_user.username,
-		"promoter": promoter if promoter in PROMOTERS else None,
-	}
+	ticket_data['bank_card'] = message.text
+
+	bot.send_message(message.chat.id, "Введіть своє повне ім'я...")
 
 	bot.register_next_step_handler(message, full_name_input, ticket_data)
 
@@ -247,6 +329,7 @@ def full_name_input(message: Message, ticket_data):
 
 	bot.send_message(message.chat.id, f"Відправте знімок екрану з оплатою")
 	bot.register_next_step_handler(message, send_screen_shot, ticket_data)
+
 
 # Отправка скриншота оплаты
 def send_screen_shot(message: Message, ticket_data):
@@ -264,21 +347,28 @@ def send_screen_shot(message: Message, ticket_data):
 
 		markup.add(back_menu)
 
+		print(ticket_data)
+
 		try:
 			with Session(engine) as session:
 				session.add(Ticket(**ticket_data))
 				session.commit()
 			bot.send_message(message.chat.id, f"Придбання вашого квитка була зареєстрованна!"
 											  f"\nВаш квиток буде нижче ⬇⬇⬇")
-			bot.send_message(message.chat.id, f"Типова вартість ціна 💸: {str(ticket_data['price'])}"
+			ticket_type = ticket_data['ticket_type']
+			bot.send_message(message.chat.id, f"Вартість квитка 💸: {str(ticket_data[f'{ticket_type}_price'])}"
+											  f"\nДата 📅: {ticket_data['date']}"
+											  f"\nТип квитка 🎫: {ticket_type}"
 											  f"\nБанковська картка 💳: {ticket_data['bank_card']}"
 											  f"\nПовне ім'я 📄: {ticket_data['full_name']}"
 											  f"\nID: {ticket_data['ticket_id']}", reply_markup=markup)
 		except Exception as e:
+			print(e)
 			bot.send_message(message.chat.id, "При додаванні квитків виникла помилка ❌")
-			handle_start(message)
+			handle_start_page(message)
 
 	except Exception as e:
+		print(e)
 		bot.send_message(message.chat.id, "Відправте знімок екрану з оплатою")
 		bot.register_next_step_handler(message, send_screen_shot, ticket_data)
 
