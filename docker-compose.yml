@@ -6,6 +6,7 @@ services:
     command: --port 5370
     expose:
       - 5370
+    restart: always
 
   app:
     build:
@@ -13,3 +14,4 @@ services:
     container_name: bot
     depends_on:
       - redis
+    restart: always

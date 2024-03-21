@@ -42,6 +42,7 @@ def handle_start_page(message: Message, promoter=None):
 	markup.add(buy_ticket, check_ticket_story)
 
 	with Session(engine) as session:
+		try:
 			event = session.query(Event).order_by(desc(Event.id)).first()
 			if event:
 				bot.send_message(message.chat.id, f"Paradise Seasons Bot"
@@ -54,6 +55,9 @@ def handle_start_page(message: Message, promoter=None):
 								 				  reply_markup=markup)
 			else:
 				bot.send_message(message.chat.id, "Заходів поки немає 🙅‍♀️")
+		except Exception as e:
+			print(e)
+
 
 # Вызов админки
 @bot.message_handler(commands=['admin'])
@@ -112,33 +116,38 @@ def keyboard_listener(call: types.CallbackQuery):
 		with Session(engine) as session:
 			event = session.query(Event).order_by(desc(Event.id)).first()
 
-		ticket_data = {
-			"date": f"{datetime.now().replace(microsecond=0)}",
-			"ticket_id": randint(100000, 999999),
-			"user_id": call.from_user.id,
-			"username": call.from_user.username,
-			"promoter": data[1] if data[1] in PROMOTERS else None,
-			'default_price': event.event_price_default,
-			'vip_price': event.event_price_vip,
-			'deadline_price': event.event_price_deadline,
-			'event_id': event.id,
-		}
+		if event:
+			ticket_data = {
+				"date": f"{datetime.now().replace(microsecond=0)}",
+				"ticket_id": randint(100000, 999999),
+				"user_id": call.from_user.id,
+				"username": call.from_user.username,
+				"promoter": data[1] if data[1] in PROMOTERS else None,
+				'default_price': event.event_price_default,
+				'vip_price': event.event_price_vip,
+				'deadline_price': event.event_price_deadline,
+				'event_id': event.id,
+			}
 
-		default = types.InlineKeyboardButton('🎟️', callback_data='ticket_type_default')
-		vip = types.InlineKeyboardButton('💎', callback_data='ticket_type_vip')
+			default = types.InlineKeyboardButton('🎟️', callback_data='ticket_type_default')
+			vip = types.InlineKeyboardButton('💎', callback_data='ticket_type_vip')
 
-		markup.add(default, vip)
+			markup.add(default, vip)
 
-		bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text="Оберіть тип квитка 🎟️", reply_markup=markup)
+			bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text="Оберіть тип квитка 🎟️", reply_markup=markup)
 
-		save_dict_to_redis(r, f'ticket_{call.from_user.id}', ticket_data)
+			save_dict_to_redis(r, f'ticket_{call.from_user.id}', ticket_data)
+
+		else:
+			bot.send_message(call.message.chat.id, "Заходів поки немає 🙅‍♀️")
 
 	elif call.data == 'ticket_type_default':
 		ticket_r = r.get(f'ticket_{call.from_user.id}')
 		saved_dict = json.loads(ticket_r)
 		saved_dict['ticket_type'] = 'default'
-		bot.send_message(call.message.chat.id, f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
-											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXXXX XXXXX XXXX XXXX")
+		bot.edit_message_text(chat_id=call.message.chat.id, text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
+											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
+							  message_id=call.message.id)
 		bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
 
 		r.delete(f'ticket_{call.from_user.id}')
@@ -147,8 +156,10 @@ def keyboard_listener(call: types.CallbackQuery):
 		ticket_r = r.get(f'ticket_{call.from_user.id}')
 		saved_dict = json.loads(ticket_r)
 		saved_dict['ticket_type'] = 'vip'
-		bot.send_message(call.message.chat.id, f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
-											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXXXX XXXXX XXXX XXXX")
+		bot.edit_message_text(chat_id=call.message.chat.id,
+							  text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
+								   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
+							  message_id=call.message.id)
 
 		bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
 
@@ -254,7 +265,7 @@ def keyboard_listener(call: types.CallbackQuery):
 				bot.delete_message(call.message.chat.id, call.message.message_id)
 		except Exception as e:
 			print(e)
-			bot.send_message(call.message.chat.id, f"Помилка при підтвердженні квитка {ticket.ticket_id} ❌")
+			bot.send_message(call.message.chat.id, f"Помилка при підтвердженні квитка ❌")
 
 	elif call.data.startswith('ejectTicket'):
 		try:
@@ -267,7 +278,7 @@ def keyboard_listener(call: types.CallbackQuery):
 				bot.delete_message(call.message.chat.id, call.message.message_id)
 		except Exception as e:
 			print(e)
-			bot.send_message(call.message.chat.id, f"Помилка при выдхиленні квитка {ticket.ticket_id} ❌")
+			bot.send_message(call.message.chat.id, f"Помилка при відхиленні квитка ❌")
 
 
 # Проверка билета
