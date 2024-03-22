@@ -20,7 +20,7 @@ import redis
 
 class Bot(TeleBot):
 	def __init__(self):
-		super().__init__(token=BOT_TOKEN)
+		super().__init__(token=TEST_BOT_TOKEN)
 
 
 bot = Bot()
@@ -109,61 +109,48 @@ def keyboard_listener(call: types.CallbackQuery):
 	elif call.data == 'back_menu':
 		handle_start_page(call.message)
 
+	elif call.data == 'back_menu_ticker_type':
+		r.delete(f'ticket_{call.from_user.id}')
+		handle_start_page(call.message)
+
 	elif data[0] == 'buy_ticket' or call.data == 'buy_ticket':
-
-		markup = types.InlineKeyboardMarkup()
-
-		with Session(engine) as session:
-			event = session.query(Event).order_by(desc(Event.id)).first()
-
-		if event:
-			ticket_data = {
-				"date": f"{datetime.now().replace(microsecond=0)}",
-				"ticket_id": randint(100000, 999999),
-				"user_id": call.from_user.id,
-				"username": call.from_user.username,
-				"promoter": data[1] if data[1] in PROMOTERS else None,
-				'default_price': event.event_price_default,
-				'vip_price': event.event_price_vip,
-				'deadline_price': event.event_price_deadline,
-				'event_id': event.id,
-			}
-
-			default = types.InlineKeyboardButton('🎟️', callback_data='ticket_type_default')
-			vip = types.InlineKeyboardButton('💎', callback_data='ticket_type_vip')
-
-			markup.add(default, vip)
-
-			bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text="Оберіть тип квитка 🎟️", reply_markup=markup)
-
-			save_dict_to_redis(r, f'ticket_{call.from_user.id}', ticket_data)
-
-		else:
-			bot.send_message(call.message.chat.id, "Заходів поки немає 🙅‍♀️")
+		ticket_type(call=call, data=data[1])
 
 	elif call.data == 'ticket_type_default':
-		ticket_r = r.get(f'ticket_{call.from_user.id}')
-		saved_dict = json.loads(ticket_r)
-		saved_dict['ticket_type'] = 'default'
-		bot.edit_message_text(chat_id=call.message.chat.id, text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
-											   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
-							  message_id=call.message.id)
-		bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
+		try:
+			ticket_r = r.get(f'ticket_{call.from_user.id}')
+			saved_dict = json.loads(ticket_r)
+			saved_dict['ticket_type'] = 'default'
+			bot.edit_message_text(chat_id=call.message.chat.id,
+								  text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
+									   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
+								  message_id=call.message.id)
 
-		r.delete(f'ticket_{call.from_user.id}')
+			bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
+
+			r.delete(f'ticket_{call.from_user.id}')
+		except Exception as e:
+			print(e)
+			bot.send_message(call.message.chat.id, "Будь ласка, спробуйте ще раз")
+			handle_start_page(call.message)
 
 	elif call.data == 'ticket_type_vip':
-		ticket_r = r.get(f'ticket_{call.from_user.id}')
-		saved_dict = json.loads(ticket_r)
-		saved_dict['ticket_type'] = 'vip'
-		bot.edit_message_text(chat_id=call.message.chat.id,
-							  text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
-								   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
-							  message_id=call.message.id)
+		try:
+			ticket_r = r.get(f'ticket_{call.from_user.id}')
+			saved_dict = json.loads(ticket_r)
+			saved_dict['ticket_type'] = 'vip'
+			bot.edit_message_text(chat_id=call.message.chat.id,
+								  text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
+									   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
+								  message_id=call.message.id)
 
-		bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
+			bot.register_next_step_handler(call.message, bank_card_input, saved_dict)
 
-		r.delete(f'ticket_{call.from_user.id}')
+			r.delete(f'ticket_{call.from_user.id}')
+		except Exception as e:
+			print(e)
+			bot.send_message(call.message.chat.id, "Будь ласка, спробуйте ще раз")
+			handle_start_page(call.message)
 
 	elif call.data == 'check_tickets':
 		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id,
@@ -281,6 +268,41 @@ def keyboard_listener(call: types.CallbackQuery):
 			bot.send_message(call.message.chat.id, f"Помилка при відхиленні квитка ❌")
 
 
+# Выбор типа билета
+def ticket_type(call, data):
+	markup = types.InlineKeyboardMarkup(row_width=2)
+
+	with Session(engine) as session:
+		event = session.query(Event).order_by(desc(Event.id)).first()
+
+	if event:
+		ticket_data = {
+			"date": f"{datetime.now().replace(microsecond=0)}",
+			"ticket_id": randint(100000, 999999),
+			"user_id": call.message.from_user.id,
+			"username": call.message.from_user.username,
+			"promoter": data[1] if data[1] in PROMOTERS else None,
+			'default_price': event.event_price_default,
+			'vip_price': event.event_price_vip,
+			'deadline_price': event.event_price_deadline,
+			'event_id': event.id,
+		}
+
+		default = types.InlineKeyboardButton('🎟️', callback_data='ticket_type_default')
+		vip = types.InlineKeyboardButton('💎', callback_data='ticket_type_vip')
+		back = types.InlineKeyboardButton('🔙', callback_data='back_menu_ticker_type')
+
+		markup.add(default, vip, back)
+
+		bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text="Оберіть тип квитка 🎟️",
+							  reply_markup=markup)
+
+		save_dict_to_redis(r, f'ticket_{call.from_user.id}', ticket_data)
+
+	else:
+		bot.send_message(call.message.chat.id, "Заходів поки немає 🙅‍♀️")
+
+
 # Проверка билета
 def check_ticket(message: Message):
 	with Session(engine) as session:
@@ -358,7 +380,6 @@ def send_screen_shot(message: Message, ticket_data):
 
 		markup.add(back_menu)
 
-		print(ticket_data)
 
 		try:
 			with Session(engine) as session:
@@ -443,5 +464,5 @@ def handle_price_deadline_input(message: Message, event_data):
 
 
 if __name__ == '__main__':
-	r = redis.Redis(host='redis_app', port=5370, db=0)
+	r = redis.Redis(host='localhost', port=6379, db=0)
 	bot.polling()
