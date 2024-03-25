@@ -9,7 +9,8 @@ from alembic import context
 
 sys.path.append(os.path.join(sys.path[0], 'bot'))
 
-from bot.config import DB_HOST, DB_PORT, DB_USER, DB_NAME, DB_PASS
+from bot.config import DB_HOST, DB_PORT, DB_USER, DB_NAME, DB_PASS, TEST_DB_HOST, TEST_DB_PORT, TEST_DB_USER, \
+    TEST_DB_NAME, TEST_DB_PASS
 from bot.database import Base, metadata
 
 from bot.models import *
@@ -24,6 +25,11 @@ config.set_section_option(section, "DB_PORT", DB_PORT)
 config.set_section_option(section, "DB_USER", DB_USER)
 config.set_section_option(section, "DB_NAME", DB_NAME)
 config.set_section_option(section, "DB_PASS", DB_PASS)
+config.set_section_option(section, "TEST_DB_HOST", TEST_DB_HOST)
+config.set_section_option(section, "TEST_DB_PORT", TEST_DB_PORT)
+config.set_section_option(section, "TEST_DB_USER", TEST_DB_USER)
+config.set_section_option(section, "TEST_DB_NAME", TEST_DB_NAME)
+config.set_section_option(section, "TEST_DB_PASS", TEST_DB_PASS)
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:

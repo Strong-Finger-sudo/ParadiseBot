@@ -24,6 +24,13 @@ class Ticket(Base):
 	confirmed = Column(Boolean, nullable=True)
 	photo_url = Column(String, nullable=False)
 
+class Personal(Base):
+	__tablename__ = 'personal'
+
+	id = Column(Integer, primary_key=True)
+	staff_type = Column(String)
+	user_id = Column(BigInteger)
+
 class Event(Base):
 	__tablename__ = 'events'
 
