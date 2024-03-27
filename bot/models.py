@@ -6,6 +6,7 @@ from database import metadata, Base
 
 class Ticket(Base):
 	__tablename__ = 'tickets'
+	__table_args__ = {'extend_existing': True}
 
 	id = Column(Integer, primary_key=True)
 	ticket_id = Column(Integer, nullable=False)
@@ -24,15 +25,20 @@ class Ticket(Base):
 	confirmed = Column(Boolean, nullable=True)
 	photo_url = Column(String, nullable=False)
 
-class Personal(Base):
-	__tablename__ = 'personal'
+
+class Staff(Base):
+	__tablename__ = 'staff'
+	__table_args__ = {'extend_existing': True}
 
 	id = Column(Integer, primary_key=True)
 	staff_type = Column(String)
-	user_id = Column(BigInteger)
+	staff_name = Column(String)
+	staff_username = Column(String)
+
 
 class Event(Base):
 	__tablename__ = 'events'
+	__table_args__ = {'extend_existing': True}
 
 	id = Column(Integer, primary_key=True)
 	event_name = Column(String)
