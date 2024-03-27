@@ -1,8 +1,8 @@
 import json
 
-from bot.database import engine
+from database import engine
 from sqlalchemy.orm import Session
-from bot.models import Staff
+from models import Staff
 
 
 def save_dict_to_redis(redis_conn, key, dictionary):
