@@ -22,10 +22,10 @@ import redis
 
 class Bot(TeleBot):
 	def __init__(self):
-		super().__init__(token=TEST_BOT_TOKEN)
+		super().__init__(token=BOT_TOKEN)
 
 
-r = redis.Redis(host=TEST_REDIS_HOST, port=TEST_REDIS_PORT, db=0)
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
 bot = Bot()
 
 
@@ -78,9 +78,9 @@ def handle_admin_page(message: Message):
 	check_ticket_buy_request = types.InlineKeyboardButton('Перевірте 🧐 заявки на купівлю квитка 🎟 ',
 														  callback_data='check_ticket_buy_request')
 	show_rules = types.InlineKeyboardButton('Правила 📝', callback_data='show_rules')
-	add_staff = types.InlineKeyboardButton('Додати персонал 🧑‍💼', callback_data='add_staff')
+	staff_menu = types.InlineKeyboardButton('Керування персоналом 🧑‍💼', callback_data='staff_menu')
 
-	markup.add(add_event, check_tickets, check_ticket_buy_request, show_rules, add_staff)
+	markup.add(add_event, check_tickets, check_ticket_buy_request, show_rules, staff_menu)
 	bot.send_message(message.chat.id, "Адмін панель 👑", reply_markup=markup)
 
 
@@ -165,10 +165,6 @@ def keyboard_listener(call: types.CallbackQuery):
 			handle_promoter_page(call.message)
 		elif staff.staff_type == 'ticket_checker':
 			handle_ticket_checker_page(call.message)
-
-	elif call.data == 'add_staff':
-		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Введіть ім'я персонала 🧑‍💼")
-		bot.register_next_step_handler(call.message, handle_staff_name_input)
 
 	elif call.data == 'back_menu':
 		handle_start_page(call.message)
@@ -410,13 +406,90 @@ def keyboard_listener(call: types.CallbackQuery):
 			bot.send_message(call.message.chat.id, f"Ваше посилання промоутеру:"
 												   f"\nhttps://t.me/ParadiseTicketBot?start={call.from_user.username}")
 
+	elif call.data == 'staff_menu':
+		markup = types.InlineKeyboardMarkup(row_width=2)
 
+		add_staff = types.InlineKeyboardButton('Додати персонал 🧑‍💼', callback_data='add_staff')
+		check_staff = types.InlineKeyboardButton('Перевірити персонал 🧑‍💼', callback_data='check_staff')
+		delete_staff = types.InlineKeyboardButton('Видалити персонал 🧑‍💼', callback_data='delete_staff')
+
+		markup.add(add_staff, check_staff, delete_staff)
+		bot.send_message(call.message.chat.id, "Оберіть дію з персоналом", reply_markup=markup)
+
+	elif call.data == 'add_staff':
+		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Введіть ім'я персонала 🧑‍💼")
+		bot.register_next_step_handler(call.message, handle_staff_name_input)
+
+	elif call.data == 'check_staff':
+		markup = types.InlineKeyboardMarkup(row_width=2)
+
+		promoters_list = types.InlineKeyboardButton('Список промоутерів 🧑‍💼', callback_data='staff_check promoters')
+		admins_list = types.InlineKeyboardButton('Список адмінів 🧑‍💼', callback_data='staff_check admins')
+		ticket_checkers_list = types.InlineKeyboardButton('Список перевіряючих квитків 🧑‍💼',
+														  callback_data='staff_check ticket_checkers')
+
+		markup.add(promoters_list, admins_list, ticket_checkers_list)
+
+		bot.send_message(call.message.chat.id, "Оберіть тип персоналу", reply_markup=markup)
+
+	elif call.data == 'delete_staff':
+		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id,
+							  text=f"Введіть юзернейм персонала 🧑‍💼")
+		bot.register_next_step_handler(call.message, handle_staff_delete_username_input)
+
+	elif call.data.startswith('staff_check'):
+		data = call.data.split()[1]
+		try:
+			with Session(engine) as session:
+				if data == 'promoters':
+					staff = session.query(Staff).filter(Staff.staff_type == 'promoter').all()
+				elif data == 'admins':
+					staff = session.query(Staff).filter(Staff.staff_type == 'admin').all()
+				elif data == 'ticket_checkers':
+					staff = session.query(Staff).filter(Staff.staff_type == 'ticket_checker').all()
+		except Exception as e:
+			print(e)
+			bot.send_message(call.message.chat.id, "Помилка при отриманні персоналу ❌")
+		if staff:
+			bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Персонал {data}:")
+			for staff in staff:
+				bot.send_message(call.message.chat.id, f"ID: {staff.id}"
+													 f"\nUsername: {staff.staff_username}"
+													 f"\nFull name: {staff.staff_name}")
+		else:
+			bot.send_message(call.message.chat.id, "Персонал не знайдений ❌")
+
+
+# Ввод ююзернейма персонала для видалення
+def handle_staff_delete_username_input(message: Message):
+	try:
+		with Session(engine) as session:
+			staff = session.query(Staff).filter(Staff.staff_username == message.text).first()
+			if staff:
+				session.delete(staff)
+				session.commit()
+				bot.send_message(message.chat.id, "Персонал видалений ✅")
+			else:
+				bot.send_message(message.chat.id, "Персонал не знайдений ❌")
+	except Exception as e:
+		print(e)
+		bot.send_message(message.chat.id, "Помилка при видаленні персонала ❌")
+	handle_admin_page(message)
+
+
+# Ввод логина
 def handle_staff_username_input(message: Message, staff_data: dict):
-	staff_data['staff_username'] = message.text
+	if message.text.startswith("https://t.me/"):
+		staff_data['staff_username'] = message.text[13:]
+	elif message.text.startswith("@"):
+		staff_data['staff_username'] = message.text[1:]
+	else:
+		staff_data['staff_username'] = message.text
 
 	save_staff(message, staff_data)
 
 
+# Ввод имени
 def handle_staff_name_input(message: Message):
 	markup = types.InlineKeyboardMarkup(row_width=2)
 
@@ -474,6 +547,7 @@ def ticket_type(call, data):
 		bot.send_message(call.message.chat.id, "Заходів поки немає 🙅‍♀️")
 
 
+# Добавление нового співробітника
 def save_staff(message: Message, staff_data):
 	try:
 		with Session(engine) as session:
@@ -482,7 +556,7 @@ def save_staff(message: Message, staff_data):
 		bot.send_message(message.chat.id, "Новий співробітник додан ✅")
 	except Exception as e:
 		print(e)
-		bot.send_message(f"Помилка при додаванні нового співробітника ❌")
+		bot.send_message(message.chat.id, f"Помилка при додаванні нового співробітника ❌")
 
 
 # Проверка билета
