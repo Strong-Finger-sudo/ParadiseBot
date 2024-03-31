@@ -11,7 +11,7 @@ from telebot import types, TeleBot
 from telebot.types import Message
 
 from database import engine
-from scripts import save_dict_to_redis, save_to_redis, get_admins
+from scripts import save_dict_to_redis, save_to_redis, get_admins, get_promoters, get_ticket_checkers
 from config import *
 from models import Ticket, Event, Staff
 
@@ -22,10 +22,10 @@ import redis
 
 class Bot(TeleBot):
 	def __init__(self):
-		super().__init__(token=BOT_TOKEN)
+		super().__init__(token=TEST_BOT_TOKEN)
 
 
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+r = redis.Redis(host=TEST_REDIS_HOST, port=TEST_REDIS_PORT, db=0)
 bot = Bot()
 
 
@@ -34,6 +34,7 @@ bot = Bot()
 def handle_start(message: Message):
 	print(message)
 	promoter = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
+	print(promoter)
 
 	handle_start_page(message, promoter)
 
@@ -54,8 +55,7 @@ def handle_start_page(message: Message, promoter=None):
 												  f"\nНайближчий захід 🎉: {event.event_name}"
 												  f"\nДата 🗓️: {event.event_date}"
 												  f"\nТипова вартість 💵: {event.event_price_default}"
-												  f"\nВіп вартість 💸: {event.event_price_vip}"
-												  f"\nЦіна кінцевого терміну 💵: {event.event_price_deadline}",
+												  f"\nВіп вартість 💸: {event.event_price_vip}",
 								 reply_markup=markup)
 			else:
 				bot.send_message(message.chat.id, "Заходів поки немає 🙅‍♀️")
@@ -82,6 +82,41 @@ def handle_admin_page(message: Message):
 
 	markup.add(add_event, check_tickets, check_ticket_buy_request, show_rules, add_staff)
 	bot.send_message(message.chat.id, "Адмін панель 👑", reply_markup=markup)
+
+
+@bot.message_handler(commands=['promoter'])
+def handle_promoter(message: Message):
+	promoters = get_promoters()
+	admins = get_admins()
+	if message.from_user.username in promoters or message.from_user.username in admins:
+		handle_promoter_page(message)
+
+
+def handle_promoter_page(message: Message):
+	markup = types.InlineKeyboardMarkup(row_width=1)
+	check_tickets = types.InlineKeyboardButton('Перевірити квитки 🎟', callback_data='check_tickets')
+	show_rules = types.InlineKeyboardButton('Правила 📝', callback_data='show_rules')
+	give_prom_link = types.InlineKeyboardButton('Отримати промоутерське посилання🌐', callback_data='give_prom_link')
+
+	markup.add(check_tickets, show_rules, give_prom_link)
+	bot.send_message(message.chat.id, "Панель промоутера 👑", reply_markup=markup)
+
+
+@bot.message_handler(commands=['ticket_checker'])
+def handle_ticket_checker(message: Message):
+	ticket_checkers = get_ticket_checkers()
+	admins = get_admins()
+	if message.from_user.username in ticket_checkers or message.from_user.username in admins:
+		handle_ticket_checker_page(message)
+
+
+def handle_ticket_checker_page(message: Message):
+	markup = types.InlineKeyboardMarkup(row_width=1)
+	check_tickets = types.InlineKeyboardButton('Перевірити квитки 🎟', callback_data='check_tickets')
+	show_rules = types.InlineKeyboardButton('Правила 📝', callback_data='show_rules')
+
+	markup.add(check_tickets, show_rules)
+	bot.send_message(message.chat.id, "Панель перевіряючого квитків 👑", reply_markup=markup)
 
 
 # Обработчик кнопок
@@ -120,7 +155,16 @@ def keyboard_listener(call: types.CallbackQuery):
 	elif call.data == 'show_rules':
 		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Правила бота 📝")
 		bot.send_message(call.message.chat.id, RULES)
-		handle_admin_page(call.message)
+
+		with Session(engine) as session:
+			staff = session.query(Staff).filter(Staff.staff_username == call.from_user.username).first()
+			print(staff)
+		if staff.staff_type == 'admin':
+			handle_admin_page(call.message)
+		elif staff.staff_type == 'promoter':
+			handle_promoter_page(call.message)
+		elif staff.staff_type == 'ticket_checker':
+			handle_ticket_checker_page(call.message)
 
 	elif call.data == 'add_staff':
 		bot.edit_message_text(message_id=call.message.id, chat_id=call.message.chat.id, text=f"Введіть ім'я персонала 🧑‍💼")
@@ -134,6 +178,7 @@ def keyboard_listener(call: types.CallbackQuery):
 		handle_start_page(call.message)
 
 	elif data[0] == 'buy_ticket' or call.data == 'buy_ticket':
+		print(data)
 		ticket_type(call=call, data=data[1])
 
 	elif call.data == 'promoter':
@@ -173,7 +218,7 @@ def keyboard_listener(call: types.CallbackQuery):
 			saved_dict = json.loads(ticket_r)
 			saved_dict['ticket_type'] = 'default'
 			bot.edit_message_text(chat_id=call.message.chat.id,
-								  text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
+								  text=f"Перекажіть кошти на банківську карту 💳 5375 4114 1943 2245"
 									   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
 								  message_id=call.message.id)
 
@@ -191,7 +236,7 @@ def keyboard_listener(call: types.CallbackQuery):
 			saved_dict = json.loads(ticket_r)
 			saved_dict['ticket_type'] = 'vip'
 			bot.edit_message_text(chat_id=call.message.chat.id,
-								  text=f"Перекажіть кошти на банківську карту 💳 XXXX XXXX XXXX XXXX"
+								  text=f"Перекажіть кошти на банківську карту 💳 5375 4114 1943 2245"
 									   f"\nПотім напишіть номер картки💳, з якої були перераховані кошти, у форматі XXXX XXXX XXXX XXXX",
 								  message_id=call.message.id)
 
@@ -222,17 +267,46 @@ def keyboard_listener(call: types.CallbackQuery):
 			bot.edit_message_text(chat_id=call.message.chat.id, text="Квиток 🎟️ успішно прийнятий ✅",
 								  message_id=call.message.id)
 
-			handle_admin_page(call.message)
+			with Session(engine) as session:
+				staff = session.query(Staff).filter(Staff.staff_username == call.from_user.username).first()
+				print(staff)
+			if staff.staff_type == 'admin':
+				handle_admin_page(call.message)
+			elif staff.staff_type == 'promoter':
+				handle_promoter_page(call.message)
+			elif staff.staff_type == 'ticket_checker':
+				handle_ticket_checker_page(call.message)
 
 		except Exception as e:
 			print(e)
 			bot.send_message(call.message.chat.id, "Помилка ❌при прийманні квитка🎟️")
 
 	elif call.data == 'decline':
-		r.delete(f'ticket_id_{call.from_user.id}')
-		bot.edit_message_text(chat_id=call.message.chat.id, text="Квиток відхилен 💀", message_id=call.message.id)
+		try:
+			ticket_id_r = r.get(f'ticket_id_{call.from_user.id}')
+			decoded_ticket_id_r = ticket_id_r.decode('utf-8')
 
-		handle_admin_page(call.message)
+			with Session(engine) as session:
+				ticket = session.query(Ticket).filter(Ticket.ticket_id == decoded_ticket_id_r).first()
+				ticket.passed = False
+				session.commit()
+			r.delete(f'ticket_id_{call.from_user.id}')
+			bot.edit_message_text(chat_id=call.message.chat.id, text="Квиток 🎟️ відхилен ",
+								  message_id=call.message.id)
+
+			with Session(engine) as session:
+				staff = session.query(Staff).filter(Staff.staff_username == call.from_user.username).first()
+				print(staff)
+			if staff.staff_type == 'admin':
+				handle_admin_page(call.message)
+			elif staff.staff_type == 'promoter':
+				handle_promoter_page(call.message)
+			elif staff.staff_type == 'ticket_checker':
+				handle_ticket_checker_page(call.message)
+
+		except Exception as e:
+			print(e)
+			bot.send_message(call.message.chat.id, "Помилка ❌при відхиленні квитка🎟️")
 
 	elif call.data == 'create_event':
 		try:
@@ -330,6 +404,12 @@ def keyboard_listener(call: types.CallbackQuery):
 			print(e)
 			bot.send_message(call.message.chat.id, f"Помилка при відхиленні квитка ❌")
 
+	elif call.data == 'give_prom_link':
+		promoters = get_promoters()
+		if call.from_user.username in promoters:
+			bot.send_message(call.message.chat.id, f"Ваше посилання промоутеру:"
+												   f"\nhttps://t.me/ParadiseTicketBot?start={call.from_user.username}")
+
 
 def handle_staff_username_input(message: Message, staff_data: dict):
 	staff_data['staff_username'] = message.text
@@ -352,8 +432,6 @@ def handle_staff_name_input(message: Message):
 
 	bot.send_message(message.chat.id, "Виберіть роль", reply_markup=markup)
 
-	print(message.from_user.id)
-
 	save_dict_to_redis(r, f"staff_{message.from_user.id}", staff_data)
 
 
@@ -364,21 +442,25 @@ def ticket_type(call, data):
 	with Session(engine) as session:
 		event = session.query(Event).order_by(desc(Event.id)).first()
 
+	promoters = get_promoters()
+	print(promoters)
+	print(data)
+
 	if event:
 		ticket_data = {
 			"date": f"{datetime.now().replace(microsecond=0)}",
 			"ticket_id": randint(100000, 999999),
 			"user_id": call.from_user.id,
 			"username": call.from_user.username,
-			"promoter": data[1] if data[1] in PROMOTERS else None,
+			"promoter": data if data in promoters else None,
 			'default_price': event.event_price_default,
 			'vip_price': event.event_price_vip,
 			'deadline_price': event.event_price_deadline,
 			'event_id': event.id,
 		}
 
-		default = types.InlineKeyboardButton('🎟️', callback_data='ticket_type_default')
-		vip = types.InlineKeyboardButton('💎', callback_data='ticket_type_vip')
+		default = types.InlineKeyboardButton('Open Door 🎟️', callback_data='ticket_type_default')
+		vip = types.InlineKeyboardButton('Vip 💎', callback_data='ticket_type_vip')
 		back = types.InlineKeyboardButton('🔙', callback_data='back_menu_ticker_type')
 
 		markup.add(default, vip, back)
@@ -405,34 +487,38 @@ def save_staff(message: Message, staff_data):
 
 # Проверка билета
 def check_ticket(message: Message):
-	with Session(engine) as session:
-		ticket = session.query(Ticket).filter(Ticket.ticket_id == message.text).first()
-		event = session.query(Event).filter(Event.id == ticket.event_id).first()
+		try:
+			with Session(engine) as session:
+				ticket = session.query(Ticket).filter(Ticket.ticket_id == message.text).first()
+				event = session.query(Event).filter(Event.id == ticket.event_id).first()
 
-		if ticket:
-			markup = types.InlineKeyboardMarkup()
-			add_event = types.InlineKeyboardButton('✔', callback_data=f'accept')
-			check_tickets = types.InlineKeyboardButton('❌', callback_data=f'decline')
+				if ticket:
+					markup = types.InlineKeyboardMarkup()
+					add_event = types.InlineKeyboardButton('✔', callback_data=f'accept')
+					check_tickets = types.InlineKeyboardButton('❌', callback_data=f'decline')
 
-			markup.add(add_event, check_tickets)
-			if ticket.confirmed is True:
-				bot.send_message(message.chat.id, f"ID: {ticket.ticket_id}"
-												  f"\nUser ID: {ticket.user_id}"
-												  f"\nUsername: {ticket.username}"
-												  f"\nFull name: {ticket.full_name}"
-												  f"\nDate: {ticket.date}"
-												  f"\nBank card: {ticket.bank_card}"
-												  f"\nPrice: {ticket.default_price if ticket.ticket_type == 'default' else ticket.vip_price}"
-												  f"\nTicket type: {ticket.ticket_type}"
-												  f"\nPassed: {ticket.passed}"
-												  f"\nConfirmed: {ticket.confirmed}"
-												  f"\nEvent Name: {event.event_name}", reply_markup=markup)
+					markup.add(add_event, check_tickets)
+					if ticket.confirmed is True:
+						bot.send_message(message.chat.id, f"ID: {ticket.ticket_id}"
+														  f"\nUser ID: {ticket.user_id}"
+														  f"\nUsername: {ticket.username}"
+														  f"\nFull name: {ticket.full_name}"
+														  f"\nDate: {ticket.date}"
+														  f"\nBank card: {ticket.bank_card}"
+														  f"\nPrice: {ticket.default_price if ticket.ticket_type == 'default' else ticket.vip_price}"
+														  f"\nTicket type: {ticket.ticket_type}"
+														  f"\nPassed: {ticket.passed}"
+														  f"\nConfirmed: {ticket.confirmed}"
+														  f"\nEvent Name: {event.event_name}", reply_markup=markup)
 
-				save_to_redis(r, f'ticket_id_{message.from_user.id}', ticket.ticket_id)
-			else:
-				bot.send_message(message.chat.id, f"Квиток був відхилен або не прийнят адміністратором ❌")
-		else:
-			bot.send_message(message.chat.id, "Квитки не знайдени 🙅‍♀️")
+						save_to_redis(r, f'ticket_id_{message.from_user.id}', ticket.ticket_id)
+					else:
+						bot.send_message(message.chat.id, f"Квиток був відхилен або не прийнят адміністратором ❌")
+				else:
+					bot.send_message(message.chat.id, "Квитки не знайдени 🙅‍♀️")
+		except Exception as e:
+			print(e)
+			bot.send_message(message.chat.id, "Помилка при отриманні квитка ❌")
 
 
 # Вибір типа квитка
@@ -481,7 +567,7 @@ def send_screen_shot(message: Message, ticket_data):
 			with Session(engine) as session:
 				session.add(Ticket(**ticket_data))
 				session.commit()
-			bot.send_message(message.chat.id, f"Придбання вашого квитка була зареєстрованна!"
+			bot.send_message(message.chat.id, f"Придбання вашого квитка було зареєстрованно!"
 											  f"\nВаш квиток буде нижче ⬇⬇⬇")
 			ticket_type = ticket_data['ticket_type']
 			bot.send_message(message.chat.id, f"Вартість квитка 💸: {str(ticket_data[f'{ticket_type}_price'])}"
