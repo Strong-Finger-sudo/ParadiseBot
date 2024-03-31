@@ -462,9 +462,16 @@ def keyboard_listener(call: types.CallbackQuery):
 
 # Ввод ююзернейма персонала для видалення
 def handle_staff_delete_username_input(message: Message):
+	if message.text.startswith("https://t.me/"):
+		username = message.text[13:]
+	elif message.text.startswith("@"):
+		username = message.text[1:]
+	else:
+		username = message.text
+
 	try:
 		with Session(engine) as session:
-			staff = session.query(Staff).filter(Staff.staff_username == message.text).first()
+			staff = session.query(Staff).filter(Staff.staff_username == username).first()
 			if staff:
 				session.delete(staff)
 				session.commit()
