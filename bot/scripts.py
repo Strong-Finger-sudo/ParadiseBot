@@ -32,7 +32,6 @@ def save_to_redis(redis_conn, key, value):
 	"""
 	redis_conn.set(key, value)
 
-
 def get_admins():
 	with Session(engine) as session:
 		admins = session.query(Staff).filter(Staff.staff_type == "admin").all()
@@ -52,3 +51,36 @@ def get_ticket_checkers():
 		admins = session.query(Staff).filter(Staff.staff_type == "ticket_checker").all()
 
 		return [username.staff_username for username in admins]
+
+
+def calculate(tickets):
+
+	profit_data = {
+		 'sum': 0,
+		 'default_ticket_quantity': 0,
+		 'vip_ticket_quantity': 0,
+		 'deadline_ticket_quantity': 0,
+		 'promoters': {}
+	}
+
+	for ticket in tickets:
+		price = 0
+		if ticket.ticket_type == 'default':
+			price += ticket.default_price
+			profit_data['default_ticket_quantity'] += 1
+		elif ticket.ticket_type == 'vip':
+			price += ticket.vip_price
+			profit_data['vip_ticket_quantity'] += 1
+		elif ticket.ticket_type == 'deadline':
+			price += ticket.deadline_price
+			profit_data['deadline_ticket_quantity'] += 1
+
+		profit_data['sum'] += price
+
+		if ticket.promoter is not None:
+			if ticket.promoter not in profit_data['promoters']:
+				profit_data['promoters'][ticket.promoter] = price
+			else:
+				profit_data['promoters']['not_promoter'] += price
+
+	return profit_data

@@ -11,7 +11,7 @@ from telebot import types, TeleBot
 from telebot.types import Message
 
 from database import engine
-from scripts import save_dict_to_redis, save_to_redis, get_admins, get_promoters, get_ticket_checkers
+from scripts import save_dict_to_redis, save_to_redis, get_admins, get_promoters, get_ticket_checkers, calculate
 from config import *
 from models import Ticket, Event, Staff
 
@@ -22,10 +22,10 @@ import redis
 
 class Bot(TeleBot):
 	def __init__(self):
-		super().__init__(token=BOT_TOKEN)
+		super().__init__(token=TEST_BOT_TOKEN)
 
 
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+r = redis.Redis(host=TEST_REDIS_HOST, port=TEST_REDIS_PORT, db=0)
 bot = Bot()
 
 
@@ -79,8 +79,9 @@ def handle_admin_page(message: Message):
 														  callback_data='check_ticket_buy_request')
 	show_rules = types.InlineKeyboardButton('Правила 📝', callback_data='show_rules')
 	staff_menu = types.InlineKeyboardButton('Керування персоналом 🧑‍💼', callback_data='staff_menu')
+	calculate_profit = types.InlineKeyboardButton('Розрахувати прибуток 🧮', callback_data='calculate_profit')
 
-	markup.add(add_event, check_tickets, check_ticket_buy_request, show_rules, staff_menu)
+	markup.add(add_event, check_tickets, check_ticket_buy_request, show_rules, staff_menu, calculate_profit)
 	bot.send_message(message.chat.id, "Адмін панель 👑", reply_markup=markup)
 
 
@@ -459,6 +460,9 @@ def keyboard_listener(call: types.CallbackQuery):
 		else:
 			bot.send_message(call.message.chat.id, "Персонал не знайдений ❌")
 
+	elif call.data == 'calculate_profit':
+		handle_calculate_profit(call.message)
+
 
 # Ввод ююзернейма персонала для видалення
 def handle_staff_delete_username_input(message: Message):
@@ -717,6 +721,38 @@ def handle_price_deadline_input(message: Message, event_data):
 									  f"\n Віп ціна 💸: {event_data['event_price_vip']}"
 									  f"\n Ціна кінцевого терміну 💵: {event_data['event_price_deadline']}",
 					 reply_markup=markup)
+
+
+def handle_calculate_profit(message: Message):
+	bot.send_message(message.chat.id, "Введіть назву заходу 🖊")
+	bot.register_next_step_handler(message, handle_date_profit_input)
+
+
+def handle_date_profit_input(message: Message):
+	event_name = message.text
+	try:
+		with Session(engine) as session:
+			event = session.query(Event).filter(Event.event_name == event_name).first()
+			if event:
+				event_id = event.id
+				tickets = session.query(Ticket).filter(Ticket.event_id == event_id).all()
+
+			else:
+				bot.send_message(message.chat.id, "Такого заходу не знайдено ❌")
+
+		profit_data = calculate(tickets)
+
+		bot.send_message(message.chat.id, f"Рентабельність заходу: {profit_data['sum']} UAH"
+										  f"\nКількість продаж звичайних квитків: {profit_data['default_ticket_quantity']}"
+										  f"\nКількість продаж віп квитків: {profit_data['vip_ticket_quantity']}"
+										  f"\nКількість продаж кінцевих квитків: {profit_data['deadline_ticket_quantity']}"
+										  f"\nНижче буде зведена статистика з продаж квитків промоутерами")
+
+		for promoter, promoter_profit in profit_data['promoters'].items():
+			bot.send_message(message.chat.id, f"{promoter}: {promoter_profit} UAH")
+	except Exception as e:
+		print(e)
+		bot.send_message(message.chat.id, "При розрахуванні рентабельності заходу виникла помилка ❌")
 
 
 if __name__ == '__main__':
