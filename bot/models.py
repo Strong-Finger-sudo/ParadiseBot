@@ -41,6 +41,7 @@ class Event(Base):
 	__table_args__ = {'extend_existing': True}
 
 	id = Column(Integer, primary_key=True)
+	event_place = Column(String)
 	event_name = Column(String)
 	event_date = Column(String)
 	event_price_default = Column(Integer)

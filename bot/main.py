@@ -55,6 +55,7 @@ def handle_start_page(message: Message, promoter=None):
 												  f"\nНайближчий захід 🎉: {event.event_name}"
 												  f"\nДата 🗓️: {event.event_date}"
 												  f"\nТипова вартість 💵: {event.event_price_default}"
+												  f"\n Місце проведення заходу: {event.event_place}"
 												  f"\nВіп вартість 💸: {event.event_price_vip}",
 								 reply_markup=markup)
 			else:
@@ -677,6 +678,14 @@ def handle_event_name_input(message: Message):
 	event_data = {
 		'event_name': message.text
 	}
+	bot.send_message(message.chat.id, "Введіть місце проведення заходу")
+	bot.register_next_step_handler(message, handle_event_place_input, event_data)
+
+
+# Ввод місця проведення заходу
+def handle_event_place_input(message: Message, event_data):
+	event_data['event_place'] = message.text
+
 	bot.send_message(message.chat.id, "Введіть дату захода у форматі DD.MM.YYYY 📆")
 	bot.register_next_step_handler(message, handle_date_input, event_data)
 
@@ -719,6 +728,7 @@ def handle_price_deadline_input(message: Message, event_data):
 									  f"\n Дата 📆: {event_data['event_date']}"
 									  f"\n Типова ціна 💵: {event_data['event_price_default']}"
 									  f"\n Віп ціна 💸: {event_data['event_price_vip']}"
+									  f"\n Місце проведення заходу: {event_data['event_place']}"
 									  f"\n Ціна кінцевого терміну 💵: {event_data['event_price_deadline']}",
 					 reply_markup=markup)
 
