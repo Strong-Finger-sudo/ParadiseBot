@@ -360,7 +360,8 @@ def keyboard_listener(call: types.CallbackQuery):
 																		 f"\nBank card: {ticket.bank_card}"
 																		 f"\nPrice: {ticket.default_price if ticket.ticket_type == 'default' else ticket.vip_price}"
 																		 f"\nTicket type: {ticket.ticket_type}"
-																		 f"\nEvent Name: {event.event_name}", reply_markup=markup)
+																		 f"\nEvent Name: {event.event_name}"
+																		 f"\nPromoter: {ticket.promoter if ticket.promoter is not None else 'без промоутеру'}", reply_markup=markup)
 					else:
 						bot.send_message(call.message.chat.id, f"ID: {ticket.ticket_id}"
 															   f"\nUser ID: {ticket.user_id}"
@@ -370,7 +371,8 @@ def keyboard_listener(call: types.CallbackQuery):
 															   f"\nBank card: {ticket.bank_card}"
 															   f"\nPrice: {ticket.default_price if ticket.ticket_type == 'default' else ticket.vip_price}"
 															   f"\nTicket type: {ticket.ticket_type}"
-															   f"\nEvent Name: {event.event_name}", reply_markup=markup)
+															   f"\nEvent Name: {event.event_name}"
+															   f"\nPromoter: {ticket.promoter if ticket.promoter is not None else 'без промоутеру'}", reply_markup=markup)
 			else:
 				bot.send_message(call.message.chat.id, "Нема запитів на купівлю квитка 🧐")
 		session.commit()
@@ -595,7 +597,8 @@ def check_ticket(message: Message):
 														  f"\nTicket type: {ticket.ticket_type}"
 														  f"\nPassed: {ticket.passed}"
 														  f"\nConfirmed: {ticket.confirmed}"
-														  f"\nEvent Name: {event.event_name}", reply_markup=markup)
+														  f"\nEvent Name: {event.event_name}"
+														  f"\nPromoter: {ticket.promoter if ticket.promoter is not None else 'без промоутеру'}", reply_markup=markup)
 
 						save_to_redis(r, f'ticket_id_{message.from_user.id}', ticket.ticket_id)
 					else:
