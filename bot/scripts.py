@@ -4,6 +4,13 @@ from database import engine
 from sqlalchemy.orm import Session
 from models import Staff
 
+import pickle
+
+
+def save_class_to_redis(redis_conn, key, cls):
+	serialized_obj = pickle.dumps(cls)
+
+	redis_conn.set(key, serialized_obj)
 
 def save_dict_to_redis(redis_conn, key, dictionary):
 	"""

@@ -1,6 +1,7 @@
 import secrets
 
-from sqlalchemy import Column, Integer, String, MetaData, Table, Boolean, BigInteger, Time, Null, ForeignKey
+from sqlalchemy import Column, Integer, String, MetaData, Table, Boolean, BigInteger, Time, Null, ForeignKey, DateTime, \
+	Date
 
 from database import metadata, Base
 
@@ -10,7 +11,7 @@ class Ticket(Base):
 
 	id = Column(Integer, primary_key=True)
 	ticket_id = Column(Integer, nullable=False)
-	date = Column(String, nullable=False)
+	date = Column(DateTime, nullable=False)
 	bank_card = Column(String, nullable=False)
 	default_price = Column(Integer, nullable=False)
 	vip_price = Column(Integer, nullable=False)
@@ -43,7 +44,7 @@ class Event(Base):
 	id = Column(Integer, primary_key=True)
 	event_place = Column(String)
 	event_name = Column(String)
-	event_date = Column(String)
+	event_date = Column(Date)
 	event_price_default = Column(Integer)
 	event_price_vip = Column(Integer)
 	event_price_deadline = Column(Integer)
