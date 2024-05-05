@@ -5,7 +5,7 @@ from typing import Type, Optional
 
 from telebot.types import CallbackQuery, Message
 
-from bot.models import Event
+from models import Event
 
 
 class TicketOrderConstruct:

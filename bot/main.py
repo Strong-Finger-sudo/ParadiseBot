@@ -24,10 +24,10 @@ import redis
 
 class Bot(TeleBot):
 	def __init__(self):
-		super().__init__(token=BOT_TOKEN)
+		super().__init__(token=TEST_BOT_TOKEN)
 
 
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+r = redis.Redis(host=TEST_REDIS_HOST, port=TEST_REDIS_PORT, db=0)
 bot = Bot()
 
 
